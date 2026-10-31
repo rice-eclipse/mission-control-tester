@@ -1,84 +1,57 @@
 # Mission Control Tester
 
-Runs the real [labjack](https://github.com/rice-eclipse/labjack) backend and the real
-[Quonkboard](https://github.com/rice-eclipse/quonkboard) on one computer, with no mission control
-box or Raspberry Pi. Only the hardware libraries are faked.
-
-```
-Quonkboard (real)
-   | WebSocket on 127.0.0.1:2707
-labjack/src: main.py and the rest of the backend (real, unmodified)
-   | labjack.ljm, board, digitalio, adafruit_max31865
-mctester/fakes -> FakeT7 and RestingSensors
-```
+Runs the labjack backend and Quonkboard on one computer without the box or the Pi. The backend code
+in `labjack/src` runs as is, and only the hardware libraries are faked.
 
 ## Setup
 
-Keep `labjack`, `quonkboard` and this folder side by side. From this folder:
+Keep `labjack`, `quonkboard` and this folder side by side, then run this here:
 
 ```bash
 py -m venv .venv
 .venv/Scripts/python -m pip install -r requirements.txt
 ```
 
-## Running it
+## Use
 
-Start the sim by double-clicking `run_sim.py`, or from a terminal:
+1. Double-click `run_sim.py`, or run `py run_sim.py`.
+2. Run `npm start` in `quonkboard` and open an engine page.
+3. Set `Connection IP` to `127.0.0.1:2707` and click `Connect`.
 
-```bash
-py run_sim.py
-```
+Commands use the password in `config.ini`. Press `q` in the sim window to stop.
 
-It switches to the `.venv` Python on its own. Leave its window open while you use the sim, and press
-`q` or `Ctrl + C` to stop it. If it can't start, the window stays open and shows why.
+## Sim window
 
-## The sim window
+| Key | Action |
+| --- | --- |
+| `m` | Switch between Prometheus and Sphinx |
+| `i` | Show or hide ignition |
+| `o` | Show or hide PS12DC outputs |
+| `e` | Show or hide pin changes |
+| `l` | Show or hide the log |
+| `v` | Show every log line |
 
-The window is a live panel of what the box is doing. Press a key to show or hide a section:
+The mode only changes what the panel lists. The ignition sequence comes from the Quonkboard page you
+fire from, and the panel switches to that engine when you do.
 
-| Key | Section | Starts |
-| --- | --- | --- |
-| `i` | Ignition: the output, how long it has been on, and the last backend message | on |
-| `m` | Mode: switch between Prometheus and Sphinx | Prometheus |
-| `o` | PS12DC outputs: pin, box label, dashboard name, power input, rail voltage, state | on |
-| `e` | Pin changes: the last few pins that changed, with times | on |
-| `l` | Log: the backend's log, without the repeating telemetry lines | off |
-| `v` | Log detail: show every log line in the Log section | off |
+`Rail` is the voltage from the mapping sheet, and `ON` means the software turned that output on. The
+sim doesn't model the key switch, so it can't tell you whether power would actually reach anything.
 
-- The mode sets which outputs are listed and their dashboard names, which come from Quonkboard's
-  config for that engine. It does not change what the backend does: the engine page you fire from
-  in Quonkboard picks the ignition sequence. Quonkboard doesn't report which page is open, so
-  the panel can't follow it until an Ignition command names the engine. The mode switches to match
-  then. `--engine` sets the starting mode.
-- An output the current engine doesn't use is hidden unless it is on. Anything without a name or
-  known wiring shows `-`.
-- Box labels, power inputs and rail voltages come from the team's mapping sheet, kept in
-  `mctester/wiring.py`. They belong to pins, so they are the same for every engine. If the box is
-  rewired, update that file and the sheet rows in `tests/test_wiring.py`, which checks them against
-  `config.ini` and Quonkboard.
-- A pin that is on but isn't in the config appears as `NOT IN CONFIG`.
-- `Rail` is the voltage the sheet lists for that output, whether or not it is on. `ON` means the
-  software has turned the output on. The sim has no real board, and it does not model the key
-  switch, so it can't show whether power would reach a valve or the igniters.
-- The full log always goes to the run folder, whatever is on screen. `--plain` scrolls the log in
-  the window instead of showing the panel.
+## Options
 
-In the `quonkboard` folder, run `npm start`. Open an engine page, set `Connection IP` to
-`127.0.0.1:2707`, and click `Connect`. The telemetry log shows `SIMULATOR - no hardware attached`
-when you are connected to the sim. Commands need the password from the config, as on the real box.
+`--config` picks a config in `labjack/src`, `--engine` sets the starting mode, `--port` changes the
+port, `--backend` points at another `src` folder, and `--plain` shows the scrolling log instead of
+the panel.
 
-Options: `--config my_config.ini` tries another config from the backend folder, `--port` changes
-the port, and `--backend` points at a different labjack `src` folder.
+## Run folders
 
-## What each run leaves behind
+Each run gets a folder in `runs/` with the backend's CSV and logs, the config it used, and
+`pins.jsonl`, a record of every pin write. CSVs grow by about 150 MB an hour.
 
-Each run gets its own folder in `runs/`, which git ignores. A run writes about 150 MB of CSV an hour.
+## Wiring
 
-- `pins.jsonl`: every digital pin write, with seconds since start. This is the record of what an
-  ignition sequence actually did.
-- `data/` and `logs/`: the CSV and log the backend would write on the Pi.
-- `work/config.ini`: the config it ran with. This is the real config with only `host` and `port`
-  changed, so there is no separate sim config to keep up to date.
+Box labels, power inputs and voltages are in `mctester/wiring.py`, copied from the mapping sheet. If
+the box changes, update that file and the rows in `tests/test_wiring.py`.
 
 ## Tests
 
@@ -86,26 +59,8 @@ Each run gets its own folder in `runs/`, which git ignores. A run writes about 1
 .venv/Scripts/python -m pytest
 ```
 
-`tests/test_end_to_end.py` starts the backend through `run_sim.py` and sends commands over WebSocket
-the way Quonkboard does. It takes about 30 seconds.
+## Limits
 
-## What is simulated
-
-- Pin state, which reads back through `EIO_STATE` and `CIO_STATE`
-- The 300 Hz stream, on a real clock, with an accurate backlog
-- Sensors at rest, plus noise, converted to volts with the config's calibration
-- Errors for unknown registers, or for starting a stream twice
-
-## What is not simulated yet
-
-- Sensors do not react to valves. Pressures stay near zero until the plant model exists.
-- There is no key switch, and no way to inject faults such as an unplugged PT or a USB drop.
-
-## What this can never test
-
-Relays, the PS12DC, wiring, the mux, the radios, and timing on the Pi itself. The fake T7 is also
-written from how the backend uses the LJM library, so behavior the real device has but the backend
-has not hit yet will not appear here. Do a hardware checkout before any fire.
-
-Check that `labjack/src` matches the code on the Pi before trusting a result. Tests here have only
-run on Windows with Python 3.14, while the Pi runs an older Python.
+Sensors sit at rest and don't react to valves, and there's no key switch or fault injection yet. The
+sim can't test wiring, relays, the PS12DC, the mux, radios or timing on the Pi, so still do a hardware
+checkout before any fire. Make sure `labjack/src` matches the Pi before trusting a result.
