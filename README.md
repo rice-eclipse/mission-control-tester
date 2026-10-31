@@ -67,7 +67,7 @@ In the `quonkboard` folder, run `npm start`. Open an engine page, set `Connectio
 `127.0.0.1:2707`, and click `Connect`. The telemetry log shows `SIMULATOR - no hardware attached`
 when you are connected to the sim. Commands need the password from the config, as on the real box.
 
-Options: `--config sphinx_config.ini` picks another config from the backend folder, `--port` changes
+Options: `--config my_config.ini` tries another config from the backend folder, `--port` changes
 the port, and `--backend` points at a different labjack `src` folder.
 
 ## What each run leaves behind
